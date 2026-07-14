@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'    //Imports StrictMode to catch sneaky bugs and bad practices in development
+import { StrictMode, useState, useEffect } from 'react'    //Imports StrictMode to catch sneaky bugs and bad practices in development
 import { createRoot } from 'react-dom/client'    //Imports the tool that lets React manipulate the browser's actual HTML elements
 import App from './App.jsx'    //Grabs the App layout file in App.jsx
 
