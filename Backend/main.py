@@ -1,10 +1,11 @@
 from fastapi import FastAPI #highly optimized framework designed to handle web requests incredibly fast
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import stat
 import os
 import shutil
 from langchain_community.document_loaders.generic import GenericLoader
-from langchain_community.document_loaders.parsers.language.language_parser import LanguageParser
+from langchain_community.document_loaders.parsers.txt import TextParser
 from git import Repo
 
 app = FastAPI() #activates the framework. app is the traffic cop that sits and listens for any incoming requests 
@@ -26,9 +27,13 @@ app.add_middleware(
     allow_headers=["*"],            # Allows all types of data headers
 )
 
+def remove_readonly(func, path, excinfo):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
 @app.get("/")
 def read_root():
-    return {"message": "Test"}
+    return {"message": "plj werk"}
 
 @app.post("/api/process-repo")
 def process_repository(data: RepoInput):
@@ -42,7 +47,7 @@ def process_repository(data: RepoInput):
     local_path = "./temp_repo"
     # Clear out the folder if it exists from an old run
     if os.path.exists(local_path):
-        shutil.rmtree(local_path)
+        shutil.rmtree(local_path, onerror=remove_readonly)
         
     try:
         print(f"📥 Cloning repository: {url}...")
@@ -54,13 +59,13 @@ def process_repository(data: RepoInput):
             local_path,
             glob="**/*",                                        # Recursively search all folders and subfolders
             suffixes=[".py", ".js", ".jsx", ".ts", ".tsx"],     # Filter for code files only
-            parser=LanguageParser()                             # Smart parser to identify syntax blocks (classes/methods)
+            parser=TextParser()                             # Smart parser to identify syntax blocks (classes/methods)
         )
         docs = loader.load()
         print(f"✅ Successfully loaded {len(docs)} code files!")
         
         # Clean up the folder to save space
-        shutil.rmtree(local_path)
+        shutil.rmtree(local_path, onerror=remove_readonly)
         
         return {
             "status": "success",
