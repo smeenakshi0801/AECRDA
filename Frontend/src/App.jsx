@@ -23,7 +23,7 @@ return (
     <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
       <h1>React + FastAPI Connection Test</h1>
       {/* Display the message on the screen */}
-      <p style={{ fontSize: '1.2rem', color: '#4CAF50', fontWeight: 'bold' }}>
+      <p style={{ fontSize: '1.2rem', color: '#4e7fda', fontWeight: 'italic' }}>
         Backend says: {serverMessage}
       </p>
     </div>

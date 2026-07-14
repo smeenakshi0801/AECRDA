@@ -18,4 +18,4 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "SRMIST AECRDA Backend is running!"}
+    return {"message": "Hello Varshini"}
