@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';  //Grabs the React hooks that let u
 function App() {
   //Create a state variable to hold the message from the backend
   const [serverMessage, setServerMessage] = useState("Loading...");
-
+  const [inputText, setInputText] = useState("");
+  
   useEffect(() => {
     //Call the backend API endpoint we created above to get the message
     fetch("http://localhost:8000/")
@@ -18,14 +19,29 @@ function App() {
       });
   }, []);
 
+  // The POST function
+  const sendDataToBackend = () => {
+    fetch("http://localhost:8000/api/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_input: inputText }), // Sends text to backend
+    })
+    .then(res => res.json())
+    .then(data => alert(data.echo)); // Shows a popup with backend response
+  };
+
 //Tells the browser exactly what layout to draw on the user's screen
 return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
-      <h1>React + FastAPI Connection Test</h1>
-      {/* Display the message on the screen */}
-      <p style={{ fontSize: '1.2rem', color: '#4e7fda', fontWeight: 'italic' }}>
-        Backend says: {serverMessage}
-      </p>
+    <div style={{ padding: '20px' }}>
+      <h1>{serverMessage}</h1>
+      <input 
+        value={inputText} 
+        onChange={(e) => setInputText(e.target.value)} 
+        placeholder="Type project data here..." 
+      />
+      <button onClick={sendDataToBackend}>
+        Send to Backend
+      </button>
     </div>
   );
 }
