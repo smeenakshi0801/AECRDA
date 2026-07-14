@@ -1,11 +1,17 @@
 from fastapi import FastAPI #highly optimized framework designed to handle web requests incredibly fast
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import os
+import shutil
+from langchain_community.document_loaders.generic import GenericLoader
+from langchain_community.document_loaders.parsers.language.language_parser import LanguageParser
+from git import Repo
 
 app = FastAPI() #activates the framework. app is the traffic cop that sits and listens for any incoming requests 
 
-class ProjectData(BaseModel):  #acts like a data filter. it ensures that the data coming from the frontend is in the correct format and structure. It also provides automatic validation and error handling for incoming data.
-    user_input: str
+# Define the data structure expected from the React frontend
+class RepoInput(BaseModel): 
+    repo_url: str       # The input field must contain a string URL
 
 origins = [
     "http://localhost:5173",
@@ -24,12 +30,43 @@ app.add_middleware(
 def read_root():
     return {"message": "Test"}
 
-@app.post("/api/send")
-def handle_project_data(data: ProjectData):
-    # This prints inside your VS Code Python terminal logs
-    print(f"🔥 Successfully received data from frontend: {data.user_input}") 
-    # This is what gets packaged and sent back to React
-    return {
-        "status": "success", 
-        "echo": f"Backend received: {data.user_input}"
-    }
+@app.post("/api/process-repo")
+def process_repository(data: RepoInput):
+    # Remove any accidental leading/trailing spaces from the incoming URL
+    url = data.repo_url.strip()
+    
+    if not url.startswith("https://github.com/"):
+        return {"status": "error", "message": "Invalid URL. Must be a GitHub link."}
+    
+    #Path where the repository will be cloned temporarily on the server
+    local_path = "./temp_repo"
+    # Clear out the folder if it exists from an old run
+    if os.path.exists(local_path):
+        shutil.rmtree(local_path)
+        
+    try:
+        print(f"📥 Cloning repository: {url}...")
+        Repo.clone_from(url, local_path)
+        
+        # Load and parse the code files
+        loader = GenericLoader.from_filesystem(
+            local_path,
+            glob="**/*",
+            suffixes=[".py", ".js", ".jsx", ".ts", ".tsx"],
+            parser=LanguageParser()
+        )
+        docs = loader.load()
+        print(f"✅ Successfully loaded {len(docs)} code files!")
+        # Clean up the folder to save space
+        shutil.rmtree(local_path)
+        
+        return {
+            "status": "success",
+            "message": f"Successfully parsed repository! Found {len(docs)} code files."
+        }
+        
+    except Exception as e:
+        if os.path.exists(local_path):
+            shutil.rmtree(local_path)
+        print(f"❌ Error: {str(e)}")
+        return {"status": "error", "message": f"Failed to process repository: {str(e)}"}
