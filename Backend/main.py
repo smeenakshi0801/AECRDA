@@ -46,17 +46,19 @@ def process_repository(data: RepoInput):
         
     try:
         print(f"📥 Cloning repository: {url}...")
+        #Trigger GitPython to download the codebase into our local path
         Repo.clone_from(url, local_path)
         
-        # Load and parse the code files
+        # Configure LangChain's filesystem loader to target and extract specific code structures
         loader = GenericLoader.from_filesystem(
             local_path,
-            glob="**/*",
-            suffixes=[".py", ".js", ".jsx", ".ts", ".tsx"],
-            parser=LanguageParser()
+            glob="**/*",                                        # Recursively search all folders and subfolders
+            suffixes=[".py", ".js", ".jsx", ".ts", ".tsx"],     # Filter for code files only
+            parser=LanguageParser()                             # Smart parser to identify syntax blocks (classes/methods)
         )
         docs = loader.load()
         print(f"✅ Successfully loaded {len(docs)} code files!")
+        
         # Clean up the folder to save space
         shutil.rmtree(local_path)
         
@@ -66,6 +68,7 @@ def process_repository(data: RepoInput):
         }
         
     except Exception as e:
+        # Ensure the temporary folder is deleted if a crash happens during download/parse
         if os.path.exists(local_path):
             shutil.rmtree(local_path)
         print(f"❌ Error: {str(e)}")
