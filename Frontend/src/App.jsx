@@ -40,7 +40,7 @@ function App() {
 
 //Tells the browser exactly what layout to draw on the user's screen
 return (
-    <div style={{ padding: '20px', fontFamily: 'sans-serif' }}>
+    <div style={{ padding: '20px', fontFamily: 'times new roman' , alignItems: 'center', textAlign: 'center'}}>
       {/* Displays the server connection status at the top */}
       <h1>AECRDA</h1>
       <h3>{serverMessage}</h3>
@@ -52,8 +52,10 @@ return (
           placeholder="Paste GitHub Repo URL here..." 
           style={{ width: '350px', padding: '8px', marginRight: '10px' }}
         />
+        <br />
+        <br />
         {/* Button that triggers the fetch call above */}
-        <button onClick={processGithubRepo} style={{ padding: '8px 15px' }}>
+        <button onClick={processGithubRepo} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#001446', border: '2px solid #9fcdfd', cursor: 'pointer' }}>
           Process Repository
         </button>
       </div>
