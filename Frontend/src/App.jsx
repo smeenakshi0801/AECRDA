@@ -40,7 +40,7 @@ function App() {
 
 //Tells the browser exactly what layout to draw on the user's screen
 return (
-    <div style={{ padding: '20px', fontFamily: 'times new roman' , alignItems: 'center', textAlign: 'center'}}>
+    <div style={{ padding: '90px', fontFamily: 'times new roman' , alignItems: 'center', textAlign: 'center'}}>
       {/* Displays the server connection status at the top */}
       <h1>AECRDA</h1>
       <h3>{serverMessage}</h3>

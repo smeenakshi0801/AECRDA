@@ -7,6 +7,19 @@ import shutil
 from langchain_community.document_loaders.generic import GenericLoader
 from langchain_community.document_loaders.parsers.txt import TextParser
 from git import Repo
+from dotenv import load_dotenv
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_chroma import Chroma
+from git import Repo
+
+# OPTION A: Local Ollama 
+from langchain_ollama import OllamaEmbeddings
+embedding_model = OllamaEmbeddings(model="nomic-embed-text")
+
+# OPTION B: Cloud OpenAI 
+# from langchain_openai import OpenAIEmbeddings
+# load_dotenv() # Loads the OPENAI_API_KEY from your .env file
+# embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
 
 app = FastAPI() #activates the framework. app is the traffic cop that sits and listens for any incoming requests 
 
@@ -45,9 +58,12 @@ def process_repository(data: RepoInput):
     
     #Path where the repository will be cloned temporarily on the server
     local_path = "./temp_repo"
+    persist_directory = "./chroma_db" # Folder where Chroma will save the vectors
     # Clear out the folder if it exists from an old run
     if os.path.exists(local_path):
         shutil.rmtree(local_path, onerror=remove_readonly)
+    if os.path.exists(persist_directory):
+        shutil.rmtree(persist_directory)
         
     try:
         print(f"📥 Cloning repository: {url}...")
@@ -62,19 +78,34 @@ def process_repository(data: RepoInput):
             parser=TextParser()                             # Smart parser to identify syntax blocks (classes/methods)
         )
         docs = loader.load()
-        print(f"✅ Successfully loaded {len(docs)} code files!")
-        
+        print(f"📦 Loaded {len(docs)} files.")
+        # We use a smaller chunk size for code so functions remain contained together
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, 
+            chunk_overlap=200)
+
+        split_docs = text_splitter.split_documents(docs)
+        print(f"✂️ Split into {len(split_docs)} unique code fragments.")
+
+        # 3. Vectorize and save into local ChromaDB storage
+        print("🧠 Generating embeddings and building vector index...")
+        vector_db = Chroma.from_documents(
+            documents=split_docs,
+            embedding=embedding_model,
+            persist_directory=persist_directory
+        )
+
         # Clean up the folder to save space
         shutil.rmtree(local_path, onerror=remove_readonly)
         
         return {
             "status": "success",
-            "message": f"Successfully parsed repository! Found {len(docs)} code files."
+            "message": f"Success! Indexed {len(split_docs)} code fragments into the knowledge base."
         }
         
     except Exception as e:
         # Ensure the temporary folder is deleted if a crash happens during download/parse
         if os.path.exists(local_path):
-            shutil.rmtree(local_path)
+            shutil.rmtree(local_path, onerror=remove_readonly)
         print(f"❌ Error: {str(e)}")
         return {"status": "error", "message": f"Failed to process repository: {str(e)}"}
