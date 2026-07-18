@@ -5,6 +5,10 @@ function App() {
   const [serverMessage, setServerMessage] = useState("Loading...");// State to hold the greeting or initial message from the backend API root
   const [repoUrl, setRepoUrl] = useState(""); // State to track the text entry inside the input field (the GitHub URL)
   const [resultMessage, setResultMessage] = useState("");// State to display the feedback or error messages received after parsing the repo
+  //For handling semantic search queries
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchStatus, setSearchStatus] = useState("");
 
   useEffect(() => {
     fetch("http://localhost:8000/")
@@ -38,30 +42,75 @@ function App() {
     });
   };
 
+  const searchKnowledgeBase = () => {
+      if (!searchQuery.trim()) return;
+      setSearchStatus("Searching vector index...");
+      setSearchResults([]);
+
+      fetch("http://localhost:8000/api/query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question: searchQuery }),
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === "success") {
+          setSearchStatus(`Found ${data.matches.length} matching code blocks!`);
+          setSearchResults(data.matches);
+        } else {
+          setSearchStatus("Search failed: " + data.message);
+        }
+      })
+      .catch(err => {
+        setSearchStatus("Failed to run semantic query.");
+      });
+    };
+
 //Tells the browser exactly what layout to draw on the user's screen
 return (
-    <div style={{ padding: '90px', fontFamily: 'times new roman' , alignItems: 'center', textAlign: 'center'}}>
-      {/* Displays the server connection status at the top */}
+    <div style={{ padding: '5px', fontFamily: 'times new roman', textAlign: 'center' }}>
       <h1>AECRDA</h1>
       <h3>{serverMessage}</h3>
-      <div style={{ margin: '20px 0' }}>
-        {/* Controlled Input Box: updates our repoUrl state on every single keystroke */}
+      
+      <div style={{ margin: '20px 0', borderBottom: '1px solid #ccc', paddingBottom: '30px' }}>
+        <h4>Ingestion & Vectorization</h4>
         <input 
-          value={repoUrl} 
-          onChange={(e) => setRepoUrl(e.target.value)} 
-          placeholder="Paste GitHub Repo URL here..." 
+          value={repoUrl}
+          onChange={(e) => setRepoUrl(e.target.value)}
+          placeholder="Paste GitHub Repo URL here..."
           style={{ width: '350px', padding: '8px', marginRight: '10px' }}
         />
-        <br />
-        <br />
-        {/* Button that triggers the fetch call above */}
-        <button onClick={processGithubRepo} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#001446', border: '2px solid #9fcdfd', cursor: 'pointer' }}>
+        <button onClick={processGithubRepo} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#1a237e' }}>
           Process Repository
         </button>
+        {resultMessage && <p style={{ fontWeight: 'bold', color: '#007BFF' }}>{resultMessage}</p>}
       </div>
-      {/* Conditionally render the feedback text block only if a result message exists */}
-      {resultMessage && <p style={{ fontWeight: 'bold', color: '#007BFF' }}>{resultMessage}</p>}
-    </div>
+
+        <h4>Semantic Code Search</h4>
+        <input 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Ask a technical question about the code..."
+          style={{ width: '450px', padding: '8px', marginRight: '10px' }}
+        />
+        <button onClick={searchKnowledgeBase} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#1a237e' }}>
+          Search Code
+        </button>
+        {searchStatus && <p style={{ fontWeight: 'bold', color: '#007BFF' }}>{searchStatus}</p>}
+
+        <div style={{ textAlign: 'left', maxWidth: '800px', margin: '20px auto' }}>
+          {searchResults.map((match, index) => (
+            <div key={index} style={{ backgroundColor: '#f5f5f5', padding: '15px', margin: '10px 0', borderLeft: '5px solid #2e7d32', borderRadius: '4px' }}>
+              <p style={{ margin: '0 0 5px 0', fontSize: '12px', fontWeight: 'bold', color: '#777' }}>
+                📁 Source File: {match.source}
+              </p>
+              <pre style={{ margin: '0', overflowX: 'auto', backgroundColor: '#272822', color: '#f8f8f2', padding: '10px', borderRadius: '4px', fontSize: '13px' }}>
+                <code>{match.content}</code>
+              </pre>
+            </div>
+          ))}
+        </div>
+      </div>
   );
 }
 export default App;  //Ships this component out so main.jsx can import it and mount it to the webpage shell

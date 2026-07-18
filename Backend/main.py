@@ -27,6 +27,9 @@ app = FastAPI() #activates the framework. app is the traffic cop that sits and l
 class RepoInput(BaseModel): 
     repo_url: str       # The input field must contain a string URL
 
+class QueryInput(BaseModel):
+    question: str
+
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -62,8 +65,8 @@ def process_repository(data: RepoInput):
     # Clear out the folder if it exists from an old run
     if os.path.exists(local_path):
         shutil.rmtree(local_path, onerror=remove_readonly)
-    if os.path.exists(persist_directory):
-        shutil.rmtree(persist_directory)
+    #if os.path.exists(persist_directory):
+       # shutil.rmtree(persist_directory)
         
     try:
         print(f"📥 Cloning repository: {url}...")
@@ -109,3 +112,36 @@ def process_repository(data: RepoInput):
             shutil.rmtree(local_path, onerror=remove_readonly)
         print(f"❌ Error: {str(e)}")
         return {"status": "error", "message": f"Failed to process repository: {str(e)}"}
+    
+@app.post("/api/query")
+def query_knowledge_base(data: QueryInput):
+    query_text = data.question.strip()
+    
+    if not os.path.exists("./chroma_db"):
+        return {"status": "error", "message": "Knowledge base is empty. Please process a repository first."}
+        
+    try:
+        # Load the existing database index from disk
+        db = Chroma(
+            persist_directory="./chroma_db",
+            embedding_function=embedding_model
+        )
+        
+        #Perform similarity search
+        results = db.similarity_search(query_text, k=3)
+        
+        # Format the retrieved snippets cleanly for display
+        retrieved_code = []
+        for doc in results:
+            retrieved_code.append({
+                "source": doc.metadata.get("source", "Unknown"),
+                "content": doc.page_content
+            })
+            
+        return {
+            "status": "success",
+            "matches": retrieved_code
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Query failed: {str(e)}"}
