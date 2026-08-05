@@ -28,7 +28,7 @@ class RepoInput(BaseModel):
     repo_url: str       # The input field must contain a string URL
 
 class QueryInput(BaseModel):
-    question: str
+    query: str
 
 origins = [
     "http://localhost:5173",
@@ -49,7 +49,7 @@ def remove_readonly(func, path, excinfo):
 
 @app.get("/")
 def read_root():
-    return {"message": "plj werk"}
+    return {"message": "Backend Live & Connected!"}
 
 @app.post("/api/process-repo")
 def process_repository(data: RepoInput):
@@ -60,7 +60,7 @@ def process_repository(data: RepoInput):
         return {"status": "error", "message": "Invalid URL. Must be a GitHub link."}
     
     #Path where the repository will be cloned temporarily on the server
-    local_path = "./temp_repo"
+    local_path = "./Backend/temp_repo"  # or direct temp folder
     persist_directory = "./chroma_db" # Folder where Chroma will save the vectors
     # Clear out the folder if it exists from an old run
     if os.path.exists(local_path):
@@ -113,9 +113,9 @@ def process_repository(data: RepoInput):
         print(f"❌ Error: {str(e)}")
         return {"status": "error", "message": f"Failed to process repository: {str(e)}"}
     
-@app.post("/api/query")
+@app.post("/query")
 def query_knowledge_base(data: QueryInput):
-    query_text = data.question.strip()
+    query_text = data.query.strip()
     
     if not os.path.exists("./chroma_db"):
         return {"status": "error", "message": "Knowledge base is empty. Please process a repository first."}

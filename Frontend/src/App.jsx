@@ -1,116 +1,311 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 function App() {
-  
-  const [serverMessage, setServerMessage] = useState("Loading...");// State to hold the greeting or initial message from the backend API root
-  const [repoUrl, setRepoUrl] = useState(""); // State to track the text entry inside the input field (the GitHub URL)
-  const [resultMessage, setResultMessage] = useState("");// State to display the feedback or error messages received after parsing the repo
-  //For handling semantic search queries
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchStatus, setSearchStatus] = useState("");
+  const [serverMessage, setServerMessage] = useState("Connecting...");
+  const [isBackendOnline, setIsBackendOnline] = useState(false);
+  const [repoUrl, setRepoUrl] = useState("");
+  const [resultMessage, setResultMessage] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progressStep, setProgressStep] = useState("");
+
+  const [userQuery, setUserQuery] = useState("");
+ // ✅ To this:
+const [chatHistory, setChatHistory] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatHistory, chatLoading]);
 
   useEffect(() => {
     fetch("http://localhost:8000/")
       .then((res) => res.json())
-      .then((data) => setServerMessage(data.message));
+      .then((data) => {
+        setServerMessage(data.message || "Backend Online");
+        setIsBackendOnline(true);
+      })
+      .catch(() => {
+        setServerMessage("Backend Offline");
+        setIsBackendOnline(false);
+      });
   }, []);
 
-  // Handler function triggered when clicking the "Process Repository" button
   const processGithubRepo = () => {
-    // Show a loading feedback notice instantly so the user knows it's processing
-    setResultMessage("Processing... Please wait.");
-    
-    // Fire a POST request containing our GitHub URL to the backend route we created
+    if (!repoUrl.trim()) {
+      setResultMessage("⚠️ Please paste a valid GitHub repository URL!");
+      return;
+    }
+
+    setIsProcessing(true);
+    setResultMessage("");
+    setProgressStep("📥 Step 1/3: Cloning GitHub Repository...");
+
+    const step2Timer = setTimeout(() => {
+      setProgressStep("✂️ Step 2/3: Extracting code files & splitting chunks...");
+    }, 3000);
+
+    const step3Timer = setTimeout(() => {
+      setProgressStep("🧠 Step 3/3: Vectorizing code snippets into Chroma DB...");
+    }, 7000);
+
     fetch("http://localhost:8000/api/process-repo", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repo_url: repoUrl }), // Wrap the link into the expected JSON structure
+      body: JSON.stringify({ repo_url: repoUrl }),
     })
     .then(res => res.json())
     .then(data => {
-      // Check the status flag returned by our FastAPI try-except block
+      clearTimeout(step2Timer);
+      clearTimeout(step3Timer);
       if(data.status === "success") {
-        setResultMessage(data.message); // Displays the file count message
+        setResultMessage(`✅ ${data.message}`);
+        setChatHistory(prev => [
+          ...prev, 
+          { sender: "bot", text: `🚀 Repository vectorized successfully! You can now ask questions about the codebase.` }
+        ]);
       } else {
-        setResultMessage("Error: " + data.message); // Displays the validation or clone error
+        setResultMessage(`❌ Error: ${data.message}`);
       }
     })
-    .catch(err => {
-      // Network failure fallback (e.g., if the Uvicorn backend server is turned off)
-      setResultMessage("Failed to connect to backend server.");
+    .catch(() => {
+      clearTimeout(step2Timer);
+      clearTimeout(step3Timer);
+      setResultMessage("❌ Connection Failed with backend.");
+    })
+    .finally(() => {
+      setIsProcessing(false);
+      setProgressStep("");
     });
   };
 
-  const searchKnowledgeBase = () => {
-      if (!searchQuery.trim()) return;
-      setSearchStatus("Searching vector index...");
-      setSearchResults([]);
+  const handleAskAI = (e) => {
+    e.preventDefault();
+    if (!userQuery.trim()) return;
 
-      fetch("http://localhost:8000/api/query", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: searchQuery }),
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.status === "success") {
-          setSearchStatus(`Found ${data.matches.length} matching code blocks!`);
-          setSearchResults(data.matches);
-        } else {
-          setSearchStatus("Search failed: " + data.message);
-        }
-      })
-      .catch(err => {
-        setSearchStatus("Failed to run semantic query.");
-      });
-    };
+    const currentText = userQuery;
+    setChatHistory((prev) => [...prev, { sender: "user", text: currentText }]);
+    setUserQuery("");
+    setChatLoading(true);
 
-//Tells the browser exactly what layout to draw on the user's screen
-return (
-    <div style={{ padding: '5px', fontFamily: 'times new roman', textAlign: 'center' }}>
-      <h1>AECRDA</h1>
-      <h3>{serverMessage}</h3>
+    fetch("http://localhost:8000/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: currentText }),
+    })
+    .then((res) => res.json())
+    .then((data) => {
+      let replyText = "";
+      if (data.matches && data.matches.length > 0) {
+        replyText = "🔍 **Matching Code Fragments Found:**\n\n" + 
+          data.matches.map((m, i) => `📁 **File:** \`${m.source}\`\n\`\`\`\n${m.content}\n\`\`\``).join("\n\n---\n\n");
+      } else {
+        replyText = data.response || data.answer || data.message || "No relevant code snippets found in the database.";
+      }
+
+      setChatHistory((prev) => [...prev, { sender: "bot", text: replyText }]);
+    })
+    .catch(() => {
+      setChatHistory((prev) => [...prev, { sender: "bot", text: "⚠️ Server error while retrieving response." }]);
+    })
+    .finally(() => setChatLoading(false));
+  };
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      backgroundColor: "#0d1117",
+      color: "#c9d1d9",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      padding: "20px"
+    }}>
       
-      <div style={{ margin: '20px 0', borderBottom: '1px solid #ccc', paddingBottom: '30px' }}>
-        <h4>Ingestion & Vectorization</h4>
-        <input 
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          placeholder="Paste GitHub Repo URL here..."
-          style={{ width: '350px', padding: '8px', marginRight: '10px' }}
-        />
-        <button onClick={processGithubRepo} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#1a237e' }}>
-          Process Repository
-        </button>
-        {resultMessage && <p style={{ fontWeight: 'bold', color: '#007BFF' }}>{resultMessage}</p>}
-      </div>
-
-        <h4>Semantic Code Search</h4>
-        <input 
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Ask a technical question about the code..."
-          style={{ width: '450px', padding: '8px', marginRight: '10px' }}
-        />
-        <button onClick={searchKnowledgeBase} style={{ padding: '8px 15px', color: '#ffffff', backgroundColor: '#1a237e' }}>
-          Search Code
-        </button>
-        {searchStatus && <p style={{ fontWeight: 'bold', color: '#007BFF' }}>{searchStatus}</p>}
-
-        <div style={{ textAlign: 'left', maxWidth: '800px', margin: '20px auto' }}>
-          {searchResults.map((match, index) => (
-            <div key={index} style={{ backgroundColor: '#f5f5f5', padding: '15px', margin: '10px 0', borderLeft: '5px solid #2e7d32', borderRadius: '4px' }}>
-              <p style={{ margin: '0 0 5px 0', fontSize: '12px', fontWeight: 'bold', color: '#777' }}>
-                📁 Source File: {match.source}
-              </p>
-              <pre style={{ margin: '0', overflowX: 'auto', backgroundColor: '#272822', color: '#f8f8f2', padding: '10px', borderRadius: '4px', fontSize: '13px' }}>
-                <code>{match.content}</code>
-              </pre>
-            </div>
-          ))}
+      {/* HEADER & STATUS */}
+      <div style={{ width: "100%", maxWidth: "800px", textAlign: "center", marginBottom: "20px" }}>
+        <h1 style={{ color: "#58a6ff", margin: "10px 0 5px 0", fontSize: "2rem" }}>Code Assistant</h1>
+        <div style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "4px 12px",
+          borderRadius: "12px",
+          backgroundColor: "#161b22",
+          border: "1px solid #30363d",
+          fontSize: "0.85rem",
+          color: isBackendOnline ? "#3fb950" : "#f85149"
+        }}>
+          <span>{isBackendOnline ? "🟢" : "🔴"}</span>
+          <span>{serverMessage}</span>
         </div>
       </div>
+
+      {/* GITHUB REPO LINK INPUT BAR */}
+      <div style={{ width: "100%", maxWidth: "800px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <input 
+            value={repoUrl} 
+            onChange={(e) => setRepoUrl(e.target.value)} 
+            disabled={isProcessing}
+            placeholder="Paste GitHub Repository Link (e.g. https://github.com/bottlepy/bottle)..." 
+            style={{
+              flex: "1",
+              padding: "12px 16px",
+              borderRadius: "8px",
+              border: "1px solid #30363d",
+              backgroundColor: "#161b22",
+              color: "#c9d1d9",
+              outline: "none",
+              fontSize: "0.95rem"
+            }}
+          />
+          <button 
+            onClick={processGithubRepo} 
+            disabled={isProcessing}
+            style={{
+              padding: "12px 22px",
+              borderRadius: "8px",
+              border: "none",
+              backgroundColor: isProcessing ? "#30363d" : "#238636",
+              color: "#fff",
+              fontWeight: "600",
+              cursor: isProcessing ? "not-allowed" : "pointer"
+            }}
+          >
+            {isProcessing ? "Processing..." : "Ingest Repo"}
+          </button>
+        </div>
+
+        {/* PROGRESS / STATUS MESSAGES */}
+        {isProcessing && (
+          <div style={{ marginTop: "8px", color: "#58a6ff", fontSize: "0.85rem" }}>
+            🔄 {progressStep}
+          </div>
+        )}
+        {!isProcessing && resultMessage && (
+          <div style={{ marginTop: "8px", fontSize: "0.85rem", color: resultMessage.includes("❌") ? "#f85149" : "#3fb950" }}>
+            {resultMessage}
+          </div>
+        )}
+      </div>
+
+      {/* CHATGPT STYLE CHAT BOX */}
+      <div style={{
+        width: "100%",
+        maxWidth: "800px",
+        flex: "1",
+        display: "flex",
+        flexDirection: "column",
+        backgroundColor: "#161b22",
+        border: "1px solid #30363d",
+        borderRadius: "12px",
+        height: "500px",
+        overflow: "hidden"
+      }}>
+        
+        {/* MESSAGES VIEW CONTAINER */}
+        <div style={{
+          flex: "1",
+          overflowY: "auto",
+          padding: "20px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px"
+        }}>
+          {chatHistory.map((msg, idx) => (
+            <div key={idx} style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: msg.sender === "user" ? "flex-end" : "flex-start"
+            }}>
+              <span style={{ fontSize: "0.75rem", color: "#8b949e", marginBottom: "4px", paddingLeft: "4px", paddingRight: "4px" }}>
+                {msg.sender === "user" ? "You" : "Code AI"}
+              </span>
+              <div style={{
+                maxWidth: "85%",
+                padding: "12px 16px",
+                borderRadius: msg.sender === "user" ? "16px 16px 2px 16px" : "16px 16px 16px 2px",
+                backgroundColor: msg.sender === "user" ? "#1f6feb" : "#21262d",
+                color: "#f0f6fc",
+                fontSize: "0.95rem",
+                lineHeight: "1.5",
+                whiteSpace: "pre-wrap",
+                border: "1px solid",
+                borderColor: msg.sender === "user" ? "#388bfd" : "#30363d",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+              }}>
+                {msg.text}
+              </div>
+            </div>
+          ))}
+
+          {/* AI THINKING STATE */}
+          {chatLoading && (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+              <span style={{ fontSize: "0.75rem", color: "#8b949e", marginBottom: "4px" }}>Code AI</span>
+              <div style={{
+                padding: "10px 16px",
+                borderRadius: "16px 16px 16px 2px",
+                backgroundColor: "#21262d",
+                border: "1px solid #30363d",
+                color: "#58a6ff",
+                fontSize: "0.9rem",
+                fontStyle: "italic"
+              }}>
+                ⚡ Searching codebase & thinking...
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* CHAT INPUT BAR */}
+        <form onSubmit={handleAskAI} style={{
+          padding: "15px",
+          backgroundColor: "#0d1117",
+          borderTop: "1px solid #30363d",
+          display: "flex",
+          gap: "10px"
+        }}>
+          <input 
+            value={userQuery}
+            onChange={(e) => setUserQuery(e.target.value)}
+            placeholder="Ask a question about the code (e.g. How does routing work?)..."
+            style={{
+              flex: "1",
+              padding: "12px 16px",
+              borderRadius: "24px",
+              border: "1px solid #30363d",
+              backgroundColor: "#161b22",
+              color: "#f0f6fc",
+              fontSize: "0.95rem",
+              outline: "none"
+            }}
+          />
+          <button 
+            type="submit" 
+            disabled={chatLoading}
+            style={{
+              padding: "12px 24px",
+              borderRadius: "24px",
+              border: "none",
+              backgroundColor: "#1f6feb",
+              color: "#ffffff",
+              fontWeight: "600",
+              fontSize: "0.95rem",
+              cursor: "pointer"
+            }}
+          >
+            Send
+          </button>
+        </form>
+
+      </div>
+    </div>
   );
 }
-export default App;  //Ships this component out so main.jsx can import it and mount it to the webpage shell
+
+export default App;
