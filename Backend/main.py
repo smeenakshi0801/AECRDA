@@ -49,9 +49,9 @@ def remove_readonly(func, path, excinfo):
 
 @app.get("/")
 def read_root():
-    return {"message": "pljj werk"}
+    return {"message": "Online and ready to process GitHub repositories!"}
 
-@app.post("/api/process-repo")
+@app.post("/api/process-repo") 
 def process_repository(data: RepoInput):
     # Remove any accidental leading/trailing spaces from the incoming URL
     url = data.repo_url.strip()
