@@ -49,7 +49,7 @@ def remove_readonly(func, path, excinfo):
 
 @app.get("/")
 def read_root():
-    return {"message": "Backend Live & Connected!"}
+    return {"message": "pljj werk"}
 
 @app.post("/api/process-repo")
 def process_repository(data: RepoInput):

@@ -126,7 +126,7 @@ const [chatHistory, setChatHistory] = useState([]);
       
       {/* HEADER & STATUS */}
       <div style={{ width: "100%", maxWidth: "800px", textAlign: "center", marginBottom: "20px" }}>
-        <h1 style={{ color: "#58a6ff", margin: "10px 0 5px 0", fontSize: "2rem" }}>Code Assistant</h1>
+        <h1 style={{ color: "#58a6ff", margin: "10px 0 5px 0", fontSize: "2rem" }}>AECRDA</h1>
         <div style={{
           display: "inline-flex",
           alignItems: "center",
@@ -150,7 +150,7 @@ const [chatHistory, setChatHistory] = useState([]);
             value={repoUrl} 
             onChange={(e) => setRepoUrl(e.target.value)} 
             disabled={isProcessing}
-            placeholder="Paste GitHub Repository Link (e.g. https://github.com/bottlepy/bottle)..." 
+            placeholder="Paste GitHub Repository Link (e.g. https://github.com/)..." 
             style={{
               flex: "1",
               padding: "12px 16px",
