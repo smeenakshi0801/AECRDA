@@ -97,11 +97,16 @@ const [chatHistory, setChatHistory] = useState([]);
     .then((res) => res.json())
     .then((data) => {
       let replyText = "";
-      if (data.matches && data.matches.length > 0) {
-        replyText = "🔍 **Matching Code Fragments Found:**\n\n" + 
-          data.matches.map((m, i) => `📁 **File:** \`${m.source}\`\n\`\`\`\n${m.content}\n\`\`\``).join("\n\n---\n\n");
+      if (data.answer) {
+        replyText = data.answer;
+        
+        // Append referenced source files at the bottom
+        if (data.matches && data.matches.length > 0) {
+          const sources = [...new Set(data.matches.map((m) => m.source))];
+          replyText += "\n\n📌 **Sources Referenced:**\n" + sources.map((s) => `- \`${s}\``).join("\n");
+        }
       } else {
-        replyText = data.response || data.answer || data.message || "No relevant code snippets found in the database.";
+        replyText = data.message || "No relevant code snippets found in the codebase.";
       }
 
       setChatHistory((prev) => [...prev, { sender: "bot", text: replyText }]);
@@ -222,7 +227,7 @@ const [chatHistory, setChatHistory] = useState([]);
               alignItems: msg.sender === "user" ? "flex-end" : "flex-start"
             }}>
               <span style={{ fontSize: "0.75rem", color: "#8b949e", marginBottom: "4px", paddingLeft: "4px", paddingRight: "4px" }}>
-                {msg.sender === "user" ? "You" : "Code AI"}
+                {msg.sender === "user" ? "You" : "AECRDAI"}
               </span>
               <div style={{
                 maxWidth: "85%",
@@ -302,7 +307,6 @@ const [chatHistory, setChatHistory] = useState([]);
             Send
           </button>
         </form>
-
       </div>
     </div>
   );
