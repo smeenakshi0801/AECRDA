@@ -7,12 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Node / React Dependencies & Builds
 node_modules
 dist
 dist-ssr
 *.local
 
-# Editor directories and files
+# Editor Directories & OS Files
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -22,5 +23,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-chroma_db
+Thumbs.db
 
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+ENV/
+
+# Vector DB & Temporary Cloned Repositories
+Backend/chroma_db/
+Backend/temp_repo/
+chroma_db/
+temp_repo/
+**/chroma_db/
+**/temp_repo/
+*.sqlite3
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
