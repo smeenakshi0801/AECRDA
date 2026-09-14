@@ -10,8 +10,9 @@ function App() {
 
   const [userQuery, setUserQuery] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [copiedIndex, setCopiedIndex] = useState(null);
 
-  // Multi-Session History State
+  // Multi-Session History State (Persisted in localStorage)
   const [sessions, setSessions] = useState(() => {
     try {
       const saved = localStorage.getItem("aecrda_repo_sessions");
@@ -114,7 +115,7 @@ function App() {
               repoUrl: trimmedUrl,
               createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               messages: [
-                { sender: "bot", text: `🚀 Repository "${repoName}" vectorized successfully! You can now ask questions about the codebase.` }
+                { sender: "bot", text: `🚀 Repository "${repoName}" vectorized successfully! Click one of the Quick Prompts on the left or type any question below.` }
               ],
             };
             setSessions((prev) => [newSession, ...prev]);
@@ -135,18 +136,17 @@ function App() {
       });
   };
 
-  const handleAskAI = (e) => {
-    e.preventDefault();
-    if (!userQuery.trim() || !activeSessionId) return;
+  const executeAskQuery = (textToAsk) => {
+    if (!textToAsk.trim() || !activeSessionId) return;
 
-    const currentText = userQuery.trim();
+    const queryText = textToAsk.trim();
     setUserQuery("");
     setChatLoading(true);
 
     setSessions((prev) =>
       prev.map((s) =>
         s.id === activeSessionId
-          ? { ...s, messages: [...s.messages, { sender: "user", text: currentText }] }
+          ? { ...s, messages: [...s.messages, { sender: "user", text: queryText }] }
           : s
       )
     );
@@ -154,7 +154,7 @@ function App() {
     fetch("http://localhost:8000/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: currentText }),
+      body: JSON.stringify({ query: queryText }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -189,6 +189,17 @@ function App() {
       .finally(() => setChatLoading(false));
   };
 
+  const handleAskAI = (e) => {
+    e.preventDefault();
+    executeAskQuery(userQuery);
+  };
+
+  const handleCopyText = (text, index) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   const handleNewRepoSession = () => {
     setActiveSessionId(null);
     setRepoUrl("");
@@ -205,6 +216,14 @@ function App() {
     }
   };
 
+  // 1-Click Code Inspector Quick Prompts
+  const quickActions = [
+    { label: "🏗️ Project Architecture", query: "Give a high-level overview of the architectural design and folder structure of this codebase." },
+    { label: "🛡️ Security & Bugs", query: "Are there any obvious security vulnerabilities, plain credentials, or edge case bugs in this repository?" },
+    { label: "🚀 Main API Routes", query: "List the core endpoints, routing logic, or main execution triggers defined in this repo." },
+    { label: "🧪 How to Run & Test", query: "How do I set up, execute, and run unit tests for this project locally?" }
+  ];
+
   return (
     <div style={{
       display: "flex",
@@ -215,17 +234,18 @@ function App() {
       overflow: "hidden"
     }}>
 
-      {/* LEFT SIDEBAR */}
+      {/* LEFT SIDEBAR: Active Repos + 1-Click Inspector */}
       <div style={{
-        width: "280px",
+        width: "300px",
         backgroundColor: "#161b22",
         borderRight: "1px solid #30363d",
         display: "flex",
         flexDirection: "column",
         flexShrink: 0
       }}>
+        {/* Header Actions */}
         <div style={{
-          padding: "16px",
+          padding: "14px 16px",
           borderBottom: "1px solid #30363d",
           display: "flex",
           justifyContent: "space-between",
@@ -243,12 +263,12 @@ function App() {
                 border: "none",
                 color: "#fff",
                 borderRadius: "4px",
-                padding: "3px 8px",
+                padding: "4px 9px",
                 cursor: "pointer",
                 fontSize: "0.75rem",
                 fontWeight: "bold"
               }}
-              title="Start new repository ingestion"
+              title="Start new repository session"
             >
               + New
             </button>
@@ -262,7 +282,6 @@ function App() {
                   cursor: "pointer",
                   fontSize: "0.75rem"
                 }}
-                title="Clear all sessions"
               >
                 Clear
               </button>
@@ -270,10 +289,11 @@ function App() {
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "12px 8px" }}>
+        {/* Repos History List */}
+        <div style={{ flex: "0 0 45%", overflowY: "auto", padding: "10px 8px", borderBottom: "1px solid #30363d" }}>
           {sessions.length === 0 ? (
-            <div style={{ color: "#8b949e", fontSize: "0.85rem", textAlign: "center", marginTop: "30px", padding: "0 10px" }}>
-              Ingest a GitHub repo to begin. Past sessions will appear here.
+            <div style={{ color: "#8b949e", fontSize: "0.82rem", textAlign: "center", marginTop: "24px", padding: "0 10px" }}>
+              No repositories ingested yet.
             </div>
           ) : (
             sessions.map((sess) => (
@@ -295,7 +315,7 @@ function App() {
               >
                 <div style={{
                   fontWeight: "600",
-                  fontSize: "0.9rem",
+                  fontSize: "0.88rem",
                   color: sess.id === activeSessionId ? "#58a6ff" : "#f0f6fc",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
@@ -310,6 +330,33 @@ function App() {
             ))
           )}
         </div>
+
+        {/* 1-Click Code Inspector Shortcuts */}
+        <div style={{ flex: 1, padding: "14px 12px", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
+          <span style={{ fontSize: "0.75rem", fontWeight: "bold", color: "#8b949e", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            ⚡ 1-Click Inspector
+          </span>
+          {quickActions.map((qa, i) => (
+            <button
+              key={i}
+              onClick={() => executeAskQuery(qa.query)}
+              disabled={!activeSessionId || chatLoading}
+              style={{
+                textAlign: "left",
+                padding: "8px 10px",
+                borderRadius: "6px",
+                border: "1px solid #30363d",
+                backgroundColor: !activeSessionId || chatLoading ? "#21262d55" : "#21262d",
+                color: !activeSessionId || chatLoading ? "#6e7681" : "#c9d1d9",
+                fontSize: "0.78rem",
+                cursor: !activeSessionId || chatLoading ? "not-allowed" : "pointer",
+                transition: "background 0.2s ease"
+              }}
+            >
+              {qa.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* MAIN CONTAINER */}
@@ -321,19 +368,18 @@ function App() {
         padding: "16px 24px",
         overflowY: "auto"
       }}>
-
-        {/* HEADER & STATUS */}
-        <div style={{ width: "100%", maxWidth: "800px", textAlign: "center", marginBottom: "16px" }}>
-          <h1 style={{ color: "#58a6ff", margin: "5px 0", fontSize: "1.8rem" }}>AECRDA</h1>
+        {/* HEADER */}
+        <div style={{ width: "100%", maxWidth: "800px", textAlign: "center", marginBottom: "14px" }}>
+          <h1 style={{ color: "#58a6ff", margin: "4px 0", fontSize: "1.7rem" }}>AECRDA</h1>
           <div style={{
             display: "inline-flex",
             alignItems: "center",
             gap: "8px",
-            padding: "4px 12px",
+            padding: "3px 10px",
             borderRadius: "12px",
             backgroundColor: "#161b22",
             border: "1px solid #30363d",
-            fontSize: "0.85rem",
+            fontSize: "0.8rem",
             color: isBackendOnline ? "#3fb950" : "#f85149"
           }}>
             <span>{isBackendOnline ? "🟢" : "🔴"}</span>
@@ -341,8 +387,8 @@ function App() {
           </div>
         </div>
 
-        {/* REPO URL INPUT */}
-        <div style={{ width: "100%", maxWidth: "800px", marginBottom: "16px" }}>
+        {/* INPUT REPO URL */}
+        <div style={{ width: "100%", maxWidth: "800px", marginBottom: "14px" }}>
           <div style={{ display: "flex", gap: "10px" }}>
             <input
               value={repoUrl}
@@ -351,20 +397,20 @@ function App() {
               placeholder="Paste GitHub Repository Link (e.g. https://github.com/)..."
               style={{
                 flex: "1",
-                padding: "12px 16px",
+                padding: "11px 15px",
                 borderRadius: "8px",
                 border: "1px solid #30363d",
                 backgroundColor: "#161b22",
                 color: "#c9d1d9",
                 outline: "none",
-                fontSize: "0.95rem"
+                fontSize: "0.92rem"
               }}
             />
             <button
               onClick={processGithubRepo}
               disabled={isProcessing}
               style={{
-                padding: "12px 22px",
+                padding: "11px 20px",
                 borderRadius: "8px",
                 border: "none",
                 backgroundColor: isProcessing ? "#30363d" : "#238636",
@@ -378,12 +424,12 @@ function App() {
           </div>
 
           {isProcessing && (
-            <div style={{ marginTop: "8px", color: "#58a6ff", fontSize: "0.85rem" }}>
+            <div style={{ marginTop: "7px", color: "#58a6ff", fontSize: "0.82rem" }}>
               🔄 {progressStep}
             </div>
           )}
           {!isProcessing && resultMessage && (
-            <div style={{ marginTop: "8px", fontSize: "0.85rem", color: resultMessage.includes("❌") ? "#f85149" : "#3fb950" }}>
+            <div style={{ marginTop: "7px", fontSize: "0.82rem", color: resultMessage.includes("❌") ? "#f85149" : "#3fb950" }}>
               {resultMessage}
             </div>
           )}
@@ -394,7 +440,7 @@ function App() {
           width: "100%",
           maxWidth: "800px",
           flex: "1",
-          minHeight: "450px",
+          minHeight: "440px",
           display: "flex",
           flexDirection: "column",
           backgroundColor: "#161b22",
@@ -405,19 +451,19 @@ function App() {
           <div style={{
             flex: "1",
             overflowY: "auto",
-            padding: "20px",
+            padding: "18px",
             display: "flex",
             flexDirection: "column",
-            gap: "16px"
+            gap: "14px"
           }}>
             {!activeSessionId ? (
-              <div style={{ margin: "auto", textAlign: "center", color: "#8b949e", fontSize: "0.9rem" }}>
-                <p style={{ fontSize: "1.1rem", color: "#c9d1d9", marginBottom: "6px" }}>No Repository Active</p>
-                <span>Paste and ingest a repo above or select a previous repository from the sidebar.</span>
+              <div style={{ margin: "auto", textAlign: "center", color: "#8b949e", fontSize: "0.88rem" }}>
+                <p style={{ fontSize: "1.05rem", color: "#c9d1d9", marginBottom: "6px" }}>No Repository Active</p>
+                <span>Paste a repo above or pick a session to use the 1-click Inspector.</span>
               </div>
             ) : chatHistory.length === 0 ? (
-              <div style={{ margin: "auto", textAlign: "center", color: "#8b949e", fontSize: "0.9rem" }}>
-                <p>Ask any question about <strong>{currentSession?.repoName}</strong> below!</p>
+              <div style={{ margin: "auto", textAlign: "center", color: "#8b949e", fontSize: "0.88rem" }}>
+                <p>Ask questions or click a shortcut button on the left!</p>
               </div>
             ) : (
               chatHistory.map((msg, idx) => (
@@ -426,21 +472,37 @@ function App() {
                   flexDirection: "column",
                   alignItems: msg.sender === "user" ? "flex-end" : "flex-start"
                 }}>
-                  <span style={{ fontSize: "0.75rem", color: "#8b949e", marginBottom: "4px", paddingLeft: "4px", paddingRight: "4px" }}>
-                    {msg.sender === "user" ? "You" : "AECRDAI"}
-                  </span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#8b949e" }}>
+                      {msg.sender === "user" ? "You" : "AECRDAI"}
+                    </span>
+                    {msg.sender === "bot" && (
+                      <button
+                        onClick={() => handleCopyText(msg.text, idx)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: copiedIndex === idx ? "#3fb950" : "#58a6ff",
+                          fontSize: "0.72rem",
+                          cursor: "pointer",
+                          padding: 0
+                        }}
+                      >
+                        {copiedIndex === idx ? "✓ Copied!" : "📋 Copy"}
+                      </button>
+                    )}
+                  </div>
                   <div style={{
-                    maxWidth: "85%",
-                    padding: "12px 16px",
-                    borderRadius: msg.sender === "user" ? "16px 16px 2px 16px" : "16px 16px 16px 2px",
+                    maxWidth: "86%",
+                    padding: "11px 15px",
+                    borderRadius: msg.sender === "user" ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
                     backgroundColor: msg.sender === "user" ? "#1f6feb" : "#21262d",
                     color: "#f0f6fc",
-                    fontSize: "0.95rem",
+                    fontSize: "0.9rem",
                     lineHeight: "1.5",
                     whiteSpace: "pre-wrap",
                     border: "1px solid",
-                    borderColor: msg.sender === "user" ? "#388bfd" : "#30363d",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                    borderColor: msg.sender === "user" ? "#388bfd" : "#30363d"
                   }}>
                     {msg.text}
                   </div>
@@ -450,25 +512,26 @@ function App() {
 
             {chatLoading && (
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                <span style={{ fontSize: "0.75rem", color: "#8b949e", marginBottom: "4px" }}>AECRDAI</span>
+                <span style={{ fontSize: "0.72rem", color: "#8b949e", marginBottom: "4px" }}>AECRDAI</span>
                 <div style={{
-                  padding: "10px 16px",
-                  borderRadius: "16px 16px 16px 2px",
+                  padding: "10px 14px",
+                  borderRadius: "14px 14px 14px 2px",
                   backgroundColor: "#21262d",
                   border: "1px solid #30363d",
                   color: "#58a6ff",
-                  fontSize: "0.9rem",
+                  fontSize: "0.85rem",
                   fontStyle: "italic"
                 }}>
-                  ⚡ Searching codebase & thinking...
+                  ⚡ Analyzing repository context...
                 </div>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
+          {/* INPUT FORM */}
           <form onSubmit={handleAskAI} style={{
-            padding: "15px",
+            padding: "12px",
             backgroundColor: "#0d1117",
             borderTop: "1px solid #30363d",
             display: "flex",
@@ -478,15 +541,15 @@ function App() {
               value={userQuery}
               onChange={(e) => setUserQuery(e.target.value)}
               disabled={!activeSessionId || chatLoading}
-              placeholder={activeSessionId ? "Ask a question about the code (e.g. How does routing work?)..." : "Please ingest or select a repo first..."}
+              placeholder={activeSessionId ? "Type a prompt or click a shortcut on the left..." : "Select or ingest a repo first..."}
               style={{
                 flex: "1",
-                padding: "12px 16px",
+                padding: "11px 16px",
                 borderRadius: "24px",
                 border: "1px solid #30363d",
                 backgroundColor: "#161b22",
                 color: "#f0f6fc",
-                fontSize: "0.95rem",
+                fontSize: "0.92rem",
                 outline: "none"
               }}
             />
@@ -494,13 +557,13 @@ function App() {
               type="submit"
               disabled={!activeSessionId || chatLoading}
               style={{
-                padding: "12px 24px",
+                padding: "10px 22px",
                 borderRadius: "24px",
                 border: "none",
                 backgroundColor: (!activeSessionId || chatLoading) ? "#30363d" : "#1f6feb",
                 color: "#ffffff",
                 fontWeight: "600",
-                fontSize: "0.95rem",
+                fontSize: "0.92rem",
                 cursor: (!activeSessionId || chatLoading) ? "not-allowed" : "pointer"
               }}
             >
